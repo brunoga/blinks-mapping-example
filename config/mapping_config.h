@@ -1,0 +1,7 @@
+#ifndef MAPPING_CONFIG_H_
+#define MAPPING_CONFIG_H_
+
+#define MAPPING_MAP_WIDTH 16
+#define MAPPING_MAP_HEIGHT 16
+
+#endif  // MAPPING_CONFIG_H_

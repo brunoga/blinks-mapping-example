@@ -1,0 +1,3 @@
+[submodule "src/blinks-mapping"]
+	path = src/blinks-mapping
+	url = https://github.com/brunoga/blinks-mapping
