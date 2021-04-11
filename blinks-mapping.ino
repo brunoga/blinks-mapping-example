@@ -64,43 +64,28 @@ static void orientation_from_face_value() {
   }
 }
 
-static void maybe_propagate() {
-  byte local_value = mapping::Get(position::Local().x, position::Local().y);
-
-  if (MAPPING_IS_NEW_VALUE(local_value)) {
-    byte real_value = MAPPING_UNSET_NEW_VALUE(local_value);
+static void maybe_send_value(int8_t x, int8_t y, byte value) {
+  if (MAPPING_IS_NEW_VALUE(value)) {
+    byte real_value = MAPPING_UNSET_NEW_VALUE(value);
 
     broadcast::Message message;
     message.header.id = MAPPING_MESSAGE_PROPAGATE_COORDINATES;
-    message.payload[0] = position::Local().x;
-    message.payload[1] = position::Local().y;
+    message.payload[0] = x;
+    message.payload[1] = y;
     message.payload[2] = real_value;
 
     if (broadcast::manager::Send(&message)) {
-      mapping::Set(position::Local().x, position::Local().y, real_value);
+      mapping::Set(x, y, real_value);
     }
-
-    return;
   }
+}
+
+static void maybe_propagate() {
+  maybe_send_value(position::Local().x, position::Local().y,
+                   mapping::Get(position::Local().x, position::Local().y));
 
   mapping::AllPositions([](int8_t x, int8_t y, byte* value) -> bool {
-    if (MAPPING_IS_NEW_VALUE(*value)) {
-      byte real_value = MAPPING_UNSET_NEW_VALUE(*value);
-
-      broadcast::Message message;
-      message.header.id = MAPPING_MESSAGE_PROPAGATE_COORDINATES;
-      message.payload[0] = x;
-      message.payload[1] = y;
-      message.payload[2] = real_value;
-
-      if (broadcast::manager::Send(&message)) {
-        *value = real_value;
-      }
-
-      return false;
-    }
-
-    return true;
+    maybe_send_value(x, y, *value);
   });
 }
 
@@ -127,8 +112,8 @@ void loop() {
   if (button_single_clicked && !has_woken) {
     timer_.set(MAPPING_TIMEOUT_MS);
 
-    // TODO(bga): Fix this. We need a way to pass the value for the local Blink
-    // here.
+    // TODO(bga): Fix this. We need a way to pass the value for the local
+    // Blink here.
     mapping::Set(position::Local().x, position::Local().y,
                  MAPPING_SET_NEW_VALUE(1));
   }
