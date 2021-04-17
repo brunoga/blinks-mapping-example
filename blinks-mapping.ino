@@ -1,4 +1,3 @@
-#include "src/blinks-broadcast/handler.h"
 #include "src/blinks-broadcast/manager.h"
 #include "src/blinks-debug/debug.h"
 #include "src/blinks-mapping/mapping.h"
@@ -16,10 +15,11 @@
 static Timer timer_;
 static bool was_alone_;
 static bool dumped_;
-static int8_t current_y_;
 
-static void consume(const broadcast::Message* message,
-                    byte absolute_local_face) {
+bool external_message_handler(byte absolute_local_face,
+                              const broadcast::Message* message) {
+  if (message->header.id != MAPPING_MESSAGE_PROPAGATE_COORDINATES) return false;
+
   timer_.set(MAPPING_TIMEOUT_MS);
 
   if (!mapping::Initialized()) {
@@ -30,13 +30,13 @@ static void consume(const broadcast::Message* message,
                  MAPPING_SET_NEW_VALUE(1));
   }
 
-  if (mapping::Get((int8_t)message->payload[0], (int8_t)message->payload[1]) !=
+  if (mapping::Get((int8_t)message->payload[0], (int8_t)message->payload[1]) ==
       MAPPING_POSITION_EMPTY) {
-    return;
+    mapping::Set((int8_t)message->payload[0], (int8_t)message->payload[1],
+                 MAPPING_SET_NEW_VALUE(message->payload[2]));
   }
 
-  mapping::Set((int8_t)message->payload[0], (int8_t)message->payload[1],
-               MAPPING_SET_NEW_VALUE(message->payload[2]));
+  return true;
 }
 
 static void orientation_from_face_value() {
@@ -81,12 +81,17 @@ static void maybe_send_value(int8_t x, int8_t y, byte value) {
 }
 
 static void maybe_propagate() {
+  if (!mapping::Initialized()) return;
+
   maybe_send_value(position::Local().x, position::Local().y,
                    mapping::Get(position::Local().x, position::Local().y));
 
-  mapping::AllPositions([](int8_t x, int8_t y, byte* value) -> bool {
-    maybe_send_value(x, y, *value);
-  });
+  mapping::Iterator iterator;
+  int8_t x;
+  int8_t y;
+  while (byte value = mapping::GetNextValidPosition(&iterator, &x, &y)) {
+    maybe_send_value(x, y, value);
+  }
 }
 
 static void process() {
@@ -97,11 +102,7 @@ static void process() {
   maybe_propagate();
 }
 
-void setup() {
-  // Setup external message handler.
-  broadcast::message::handler::Set(
-      {MAPPING_MESSAGE_PROPAGATE_COORDINATES, consume});
-}
+void setup() {}
 
 void loop() {
   process();
@@ -112,8 +113,6 @@ void loop() {
   if (button_single_clicked && !has_woken) {
     timer_.set(MAPPING_TIMEOUT_MS);
 
-    // TODO(bga): Fix this. We need a way to pass the value for the local
-    // Blink here.
     mapping::Set(position::Local().x, position::Local().y,
                  MAPPING_SET_NEW_VALUE(1));
   }
@@ -124,21 +123,19 @@ void loop() {
   } else {
     setColor(BLUE);
     if (!dumped_) {
-      mapping::AllPositions([](int8_t x, int8_t y, byte* value) -> bool {
-        if (y != current_y_) {
-          LOGFLN("");
-          current_y_ = y;
-        }
+      mapping::Iterator iterator;
 
-        LOG(*value);
-        LOGF(" ");
+      int8_t x;
+      int8_t y;
+      while (byte value = mapping::GetNextValidPosition(&iterator, &x, &y)) {
+        LOG(x);
+        LOGF(",");
+        LOG(y);
+        LOGF(" -> ");
+        LOGLN(value);
 
-        return true;
-      });
-
-      LOGFLN("");
-
-      dumped_ = true;
+        dumped_ = true;
+      }
     }
   }
 
