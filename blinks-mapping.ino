@@ -86,12 +86,13 @@ static void maybe_propagate() {
   maybe_send_value(position::Local().x, position::Local().y,
                    mapping::Get(position::Local().x, position::Local().y));
 
-  mapping::Iterator iterator;
-  int8_t x;
-  int8_t y;
-  while (byte value = mapping::GetNextValidPosition(&iterator, &x, &y)) {
-    maybe_send_value(x, y, value);
-  }
+  mapping::AllValidPositions(
+      [](int8_t x, int8_t y, byte* value, void* context) -> bool {
+        maybe_send_value(x, y, *value);
+
+        return true;
+      },
+      nullptr);
 }
 
 static void process() {
@@ -123,19 +124,19 @@ void loop() {
   } else {
     setColor(BLUE);
     if (!dumped_) {
-      mapping::Iterator iterator;
+      mapping::AllValidPositions(
+          [](int8_t x, int8_t y, byte* value, void* context) -> bool {
+            LOG(x);
+            LOGF(",");
+            LOG(y);
+            LOGF(" -> ");
+            LOGLN(*value);
 
-      int8_t x;
-      int8_t y;
-      while (byte value = mapping::GetNextValidPosition(&iterator, &x, &y)) {
-        LOG(x);
-        LOGF(",");
-        LOG(y);
-        LOGF(" -> ");
-        LOGLN(value);
+            return true;
+          },
+          nullptr);
 
-        dumped_ = true;
-      }
+      dumped_ = true;
     }
   }
 
